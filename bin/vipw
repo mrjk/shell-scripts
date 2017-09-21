@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# This script allows the user to edit some common files quickly
+suroot vimpw
+

@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# This commands show headers of URL
+
+wget --no-check-certificate -S -O /dev/null $@

@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# You may need to disable selinux to make it work
+# TODO: remove sudo prefix ...
+
+#sudo docker pull cmaohuang/firefox-java
+
+if [[ -z $@ ]]; then
+  opts=--new-instance
+else
+  opts=$@
+fi
+echo $opts
+
+sudo docker run -ti --rm -e DISPLAY=:0 -v $HOME/opt/docker/data/firefox-java:/home/firefox/ -v /tmp/.X11-unix:/tmp/.X11-unix   cmaohuang/firefox-java firefox $opts
+#sudo docker run -ti --rm -e DISPLAY=:0 -v $HOME/opt/docker/data/firefox-java:/home/firefox/ -v /tmp/.X11-unix:/tmp/.X11-unix   cmaohuang/firefox-java /usr/bin/firefox $opts
+#sudo docker run -ti --rm -e DISPLAY=:0 -v /tmp/.X11-unix:/tmp/.X11-unix   cmaohuang/firefox-java /usr/bin/firefox --new-instance
+
+# To init:
+#docker cp 661ef59d16c7:/home/firefox/.mozilla $HOME/opt/docker/data/firefox-java
+

@@ -1,0 +1,10 @@
+# Things to do
+
+A script who show all dropped packets via iptables
+A script to ban an IP address
+A script to show the current swetup: distro, pstree, netst -lntpu, firewall? Selinux? etc ...
+A script to show status: ram, load, freespace, IOs, net usage, partitions
+
+
+# Un truc pour afficher quels services:
+# http://blog.cyphermox.net/2017/05/ss-another-way-to-get-socket-statistics.html

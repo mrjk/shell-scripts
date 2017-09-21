@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# Display waiting message
+>&2 echo "INFO: My internet IP address is ..."
+wget -q -O - "$@" monip.org | grep -o "[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}"

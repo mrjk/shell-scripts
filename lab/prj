@@ -1,0 +1,197 @@
+#!/bin/bash
+
+# This command line manage home projects
+
+PRJ_CONFIG_FILE=${XDG_CONFIG_HOME:-~/.config}/prjmgr/config.bash
+PRJ_DATA_FILE=${XDG_DATA_HOME:-~/.local/share}/prjmgr/data.csv
+PRJ_HOME=~/data/prj
+PRJ_NS_DEFAULT=jez
+PRJ_NAME_DEFAULT=default
+
+# Usage: global
+# prj new <ns> <name>
+# prj new <ns> <name>
+# prj new <ns> <name>
+# prj new <ns> <name>
+# prj go <ns> <name>
+
+# prj list [<ns>] [<prj>]
+# prj nslist [<ns>]
+# prj prjlist [<prj>]
+
+# NS can be:
+#   home: manage user land params
+#   porject: 
+
+
+# Usage: Local
+#prj <ns>/<name> run
+#prj <ns>/<name> install <python/lua/gem> <object>
+#prj caplist: list project capabilities ... vagrant, ansible, subuser, ...
+
+
+# Args: action ns name path
+__register(){
+  local _action=$1
+  local _ns=$2
+  local _name=$3
+  local _path=$4
+
+  if [[ "${_action}" == "add" ]]; then
+    #echo "Add ${_ns}/${_name} (echo >>)"
+    echo "${_ns}/${_name}:${_path}" >> "${PRJ_DATA_FILE}"
+  elif [[ "${_action}" == "del" ]]; then
+    echo "Del ${_ns}/${_name} (sed)"
+  else
+    echo "Error in register action"
+  fi
+}
+
+# Args: $@
+# Ex: <namespace> <name>
+# Ex: <namespace> <name> <other_opt>
+# Ex: <name> <other_opt>
+# Return: ns name shift
+
+__parse_prj_name(){
+  local args=$@
+  local _shift=0
+
+  # Search namespace
+  if [[ -d ${PRJ_HOME}/${1} ]]; then
+    #echo "NS=${1}"
+    _ns=${1}
+    _shift=$(( shift + 1 ))
+    shift 1
+  else
+    #echo "NS=${PRJ_NS_DEFAULT}"
+    _ns=${PRJ_NS_DEFAULT}
+  fi
+
+  # Search project
+  if [[ "${1}" =~ ^[a-z][a-z0-9]* ]]; then
+    #echo "NAME=${1}"
+    _name=${1}
+    _shift=$(( shift + 1 ))
+    shift 1
+  else
+    #echo "NAME=${PRJ_NAME_DEFAULT}"
+    _name=${PRJ_NAME_DEFAULT}
+  fi
+
+  # Return result
+  echo "${_ns}" "${_name}" "${@}"
+}
+
+prj_new(){
+  local _ns=${1}
+  local _name=${2}
+  shift 2
+
+  # Check if project does not already exists
+  if [[ -d "${PRJ_HOME}/${_ns}/${_name}" ]]; then
+    echo "ERROR: Project ${_ns}/${_name} already exists."
+    exit 1
+  fi
+
+  # Get flags:
+  # -g : giturl clone
+  # -b : Enable auto git backup
+  # -p : Create a virtualenv (Python)
+  # -r : Create rvmenv (Ryby)
+  # -v : Create vagrant template
+  # -a : Insert ansible template
+
+
+  # Create project
+  mkdir -p "${PRJ_HOME}/${_ns}/${_name}"
+  local _envvars_file="${PRJ_HOME}/${_ns}/${_name}/.envvars"
+
+  echo "PRJ_TYPE=dev,config" > "${_envvars_file}"
+  echo "PRJ_UPSTREAM=${_prj_upstream}" >>"${_envvars_file}"
+  echo "PRJ_PROFILE=${_prj_profile}" >>"${_envvars_file}"
+  echo "PRJ_BACKUP=${_prj_backup}" >>"${_envvars_file}"
+  echo "PRJ_DE_MOD=auto" >>"${_envvars_file}"
+  echo "PRJ_DE_MOD='git ansible vagrant virtualenv'" >>"${_envvars_file}"
+  echo "PRJ_BIN='ansible vagrant pip docker'" >>"${_envvars_file}"
+
+  echo "PRJ_ID=jez" >>"${_envvars_file}"
+  echo "PRJ_GIT_UPSTREAM='https://github.com/user/prj'" >>"${_envvars_file}"
+  echo "PRJ_GIT_BACKUP='https://git.jzn42.net/${_ns}/${_name}'" >>"${_envvars_file}"
+
+  echo "PRJ_CAP=git git_prompt" >>"${_envvars_file}"
+
+  echo "PRJ_DIR_DOC='./docs'" >>"${_envvars_file}"
+  echo "PRJ_DIR_EXAMPLE='./exemples'" >>"${_envvars_file}"
+  echo "PRJ_DIR_BIN='./build/bin'" >>"${_envvars_file}"
+  echo "PRJ_DIR_BIN='./build/bin'" >>"${_envvars_file}"
+
+  echo "PRJ_VENV_NAME=my_virtual_env_name" >>"${_envvars_file}"
+  echo "PRJ_VENV_CONFIG_DIR=venv/requirements.txt" >>"${_envvars_file}"
+  echo "PRJ_VENV_PYTHON=system" >>"${_envvars_file}"
+
+  echo "PRJ_SUBUSER=ansible" >>"${_envvars_file}"
+  echo "PRJ_SCREENRC=screen-prj.cfg" >>"${_envvars_file}"
+
+  echo "PRJ_DIR_VAGRANT=vagrant/" >>"${_envvars_file}"
+  echo "PRJ_DIR_ANSIBLE=ansible/" >>"${_envvars_file}"
+  echo "PRJ_DIR_DOCKER_COMPOSE=docker/" >>"${_envvars_file}"
+
+  # Create readme
+  touch "${PRJ_HOME}/${_ns}/${_name}/README.md"
+
+  cd ${PRJ_HOME}/${_ns}/${_name} && git init
+
+}
+
+prj_list(){
+  find ${PRJ_HOME} -mindepth 2  -maxdepth 2 -type d | sed -E -e "s@.*${PRJ_HOME}/?@@" -e "s@/@ @" | sort
+}
+
+#numargs=$#
+
+#for ((i=1 ; i <= numargs ; i++)) ; do
+
+    # Shift to next argument
+    argument="${1}"
+    shift 1
+    echo $argument
+
+    # Anaylyse arguments
+    case "${argument}" in
+        new )
+	    echo prj_new $(__parse_prj_name $@)
+            prj_new $(__parse_prj_name $@)
+            ;;
+        list )
+            prj_list $(__parse_prj_name $@)
+            ;;
+        del )
+            prj_del $(__parse_prj_name $@)
+            ;;
+        help )
+            show_help
+            ;;
+
+# Not implemented yet ...
+        show )
+            echo show_doc $@
+            ;;
+        search )
+            echo search_keyword $@
+            ;;
+        * )
+            echo "ERROR: Unknown argument: ${argument}"
+            show_help
+            ;;
+    esac
+
+
+#done
+
+
+
+
+
+
+

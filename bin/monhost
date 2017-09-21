@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Display waiting message
+>&2 echo "INFO: My host is ..."
+
+# Get current IP
+current_ip=$(wget -q -O - "$@" monip.org | grep -o "[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}" )
+
+# Display current host
+host ${current_ip}
+

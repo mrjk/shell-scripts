@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# This script look 
+
+# The way of doing it:
+
+# File pattern: <app>/<version>/Df[-flavor]   => app-version[-flavor]
+#               <app>/version/Df	      => app-version
+#               <app>/latest/Df-flavor	      => app-flavor
+#               <app>/latest/Df		      => app-latest
+#               <app>/latest/Df		      => app
+#               <app>			      => app
+
+
+
+AB_DST=${HOME}/opt/bin
+AB_PATHS="${HOME}/opt/misc ${HOME}/opt/git/*/*"
+AB_MAXDEPTH=${AB_MAXDEPTH:-4}
+
+# Purge broken links
+find ${AB_DST} -xtype l -delete
+
+# Search for new binaries
+for AB_PATH in ${AB_PATHS}; do
+  for entry in $(find ${AB_PATH} \
+		  -maxdepth $AB_MAXDEPTH \
+		  -type  f \
+		  -executable \
+		  -path "*bin/*" ) ; do
+
+    file=${entry##*/}
+    #echo file ${entry##*/}
+    #echo path $(dirname ${entry})
+
+    if [[ -L "${AB_DST}/${file}" ]]; then
+      echo "Updating ${file} ..."
+      ln -srf ${entry} ${AB_DST}/${file}
+    elif [[ ! -f "${AB_DST}/${file}" ]]; then
+      echo "Creating ${file} ..."
+      ln -srf ${entry} ${AB_DST}/${file}
+    fi
+  done
+done 
+exit 0
+
+
+#TOFIX: Quick fix
+#. ~/homeland/.config/autobin/config
+#. ~/homeland/.usr/lib/hdm_autobin.sh

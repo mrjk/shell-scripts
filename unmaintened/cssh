@@ -1,0 +1,88 @@
+#!/bin/bash
+
+
+# BIG ISSUE: Clear passwords stored in /tmp ...
+
+# Configuration
+cssh_connect_data=~/.config/cssh/data.csv
+ESCRIPT=/tmp/expect_scr
+
+# Arguments
+cssh_host=${1}
+
+
+# Check arguments
+if [[ -z $cssh_host ]]; then
+  >&2 echo "ERROR: You need to provide an host"
+  exit 1
+fi
+
+# Get informations
+cssh_data=$(cat $cssh_connect_data | grep ssh | grep $cssh_host | head -n 1 )
+cssh_ssh_passwd="$( echo $cssh_data | cut -d';' -f 4)"
+cssh_en_passwd="$( echo $cssh_data | cut -d';' -f 5)"
+
+# Run cssh_shell
+ssh_host=$cssh_host
+ssh_passwd=$cssh_ssh_passwd
+en_passwd=$cssh_en_passwd
+
+
+#/usr/bin/expect -d - << EOF
+
+cat > $ESCRIPT << EOF
+
+# Set variables
+#set ssh_user [lindex $argv 0]
+#set ssh_user $ssh_user@
+set ssh_user  ""
+
+set ssh_host [lindex $argv 0]
+set ssh_passwd [lindex $argv 1]
+set en_passwd [lindex $argv 2]
+
+
+
+# Announce device & time
+send_user ">>>>> Working on $ssh_host @ [exec date] <<<<<\n"
+
+
+spawn assh wrapper ssh -o StrictHostKeyChecking=no $ssh_user$ssh_host
+
+# Connection issues & priv password
+expect {
+  timeout { send_user "\nTimeout Exceeded - Check Host\n"; exit 1 }
+  eof { send_user "\nSSH Connection To $ssh_host Failed\n"; exit 1 }
+  "*assword:" { send "$ssh_passwd\r" }
+}
+
+#exp_internal 1
+
+# Enable password
+expect {
+  default { send_user "\nLogin Failed - Check Password\n"; exit 1 }
+  "*#" { 
+		#puts 'You are logged on the router!'
+		send "\r" 
+    interact
+		#expect eof
+	}
+  "*>" {
+    send "enable\n"
+    expect "*assword:"
+    send "$en_passwd\r"
+		#expect "*#"
+		#wait
+		#puts 'You are logged on the router :-)'
+    interact
+		#expect eof
+  }
+}
+
+
+EOF
+
+
+expect -f $ESCRIPT ${cssh_host} "${cssh_ssh_passwd}" "${cssh_en_passwd}"
+
+rm $ESCRIPT

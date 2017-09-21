@@ -1,0 +1,34 @@
+#! /bin/bash
+
+
+echo "> List of current ssh network sessions:"
+echo "========================================"
+who | grep -v localhost
+echo ""
+
+echo "> List of current ssh network connexions:"
+echo "========================================"
+netstat -tnpa | grep --color=always ESTABLISHED.*sshd
+echo ""
+
+echo "> List of current ssh processes:"
+echo "========================================"
+ps -A x | grep --color=always sshd: |grep  -v grep
+echo ""
+
+echo "> List of current ssh tunnels:"
+echo "========================================"
+lsof -i -n | egrep --color=always '\<ssh\>'
+echo ""
+
+
+echo "> List of current tunnels made by sshd:"
+echo "========================================"
+lsof -i -n | egrep --color=always '\<sshd\>'
+echo ""
+
+
+echo "> List of current IP tunnels:"
+echo "========================================"
+ip tunnel list
+echo ""

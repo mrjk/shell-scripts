@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# This script allows the user to run a root command in any mode
+
+# Define the file to be edited
+command=$@
+
+whereis -B "$(echo $PATH | sed "s/[^:]*$(id -un)[^:]*://g"| tr ':' ' ')"  -f -b vipw
+

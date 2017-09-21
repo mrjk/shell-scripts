@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# This command disable https CA checking
+
+wget --no-check-certificate $@

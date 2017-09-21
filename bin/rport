@@ -1,0 +1,10 @@
+#!/bin/bash
+
+target_host=$1
+target_port=$2
+local_port=$3
+
+echo "The port '${target_port}' of '${target_host##*@}' is available on 'localhost:${local_port}'"
+ssh -nNT -L ${local_port}:localhost:${target_port} ${target_host}
+
+

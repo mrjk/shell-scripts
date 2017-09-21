@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# Allow ssh connections without checking remote host autenthicity
+ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no $@
+

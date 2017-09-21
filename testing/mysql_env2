@@ -1,0 +1,264 @@
+#!/bin/bash
+
+
+################################
+# Info
+################################
+# This script is an helper to manage mysql.
+# Author: Jez
+# Contact: jez@jeznet.org
+# License: GPL
+# Version: 0.5
+
+
+################################
+# Config
+################################
+OUT=/etc/mysql/environements
+NET='10.0.42.%'
+LOCAL='127.0.0.1'
+
+
+################################
+# Default source
+################################
+PROGRAM_NAME="mysql_env"
+
+PERM_READ="SELECT"
+PERM_DATA="SELECT, INSERT, UPDATE, DELETE"
+PERM_WRITE="SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP, CREATE TEMPORARY TABLES, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EXECUTE, CREATE VIEW, EVENT, TRIGGER"
+PERM_ADMIN="SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP, CREATE TEMPORARY TABLES, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EXECUTE, CREATE VIEW, EVENT, TRIGGER, SHOW DATABASES, LOCK TABLES, REFERENCES"
+PERM_ADMIN="SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP, CREATE TEMPORARY TABLES, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EXECUTE, CREATE VIEW, EVENT, TRIGGER, SHOW DATABASES"
+PERM_ADMIN="ALL PRIVILEGES"
+PERM_SUPER=" CREATE USER, FILE, PROCESS, RELOAD, REPLICATION CLIENT, REPLICATION SLAVE, SHOW DATABASES, SHUTDOWN, SUPER"
+
+
+HOST=$NET
+PERM_REVOKE=0
+PERM_ROOT=0
+
+
+################################
+# Functions
+################################
+
+# Help
+function action_help {
+echo "Usage: $PROGRAM_NAME DATABASE [ -p r|d|w|a ] [ -l ]|[ -n ]|[ -s IP|NET|HOST ]
+Concatenate FILE(s), or standard input, to standard output.
+
+  -p		set permissions (w per default)
+  -s		set the source ($HOST per default)
+  -l		set the source on localhost ($LOCAL)
+  -n		set the source on network ($NET)
+  -r            remove all existing privileges when manipulating an user (use with care)
+  -u            show users having permission on this base
+  -h		show this help
+
+Permissions:
+  r             Read only (read)
+  d             Data only (read and write)
+  w             Write (read, write and structure)
+  a             Admin (read, write, structure and root)
+  s             Super (read, write, structure, root and super)
+
+Examples:
+  $PROGRAM_NAME wordpress     Create a database 'wordpress' with the associated user
+  $PROGRAM_NAME vmail -n      Create a database the with associated user, allowed to
+                              connect himself from $NET
+  $PROGRAM_NAME wordpress -n  Create a database with associated user, allowed to
+                              connect himself from $NET
+
+Report $PROGRAM_NAME bugs to jez@jeznet.org
+General help using GNU software: <http://www.gnu.org/gethelp/>
+
+"
+}
+
+# Show databases
+function action_show_db {
+        # Show databases
+        echo "> List of databases:"
+        mysql -e "SHOW DATABASES"
+}
+
+# Users
+function action_users {
+#	mysql -e "select user, host from mysql.user WHERE password <> '' ORDER BY user,host"
+
+        # Show associated users
+	#USERS=$(mysql -B -N -e "SELECT DISTINCT(GRANTEE) FROM information_schema.SCHEMA_PRIVILEGES WHERE TABLE_SCHEMA  = \"$1\" " )
+
+        echo "> List of users having privileges on $1:"
+	mysql -e "SELECT DISTINCT(GRANTEE) AS 'User' FROM information_schema.SCHEMA_PRIVILEGES WHERE TABLE_SCHEMA  = \"$1\" "
+        #echo $USERS | tr ' ' '\n'
+        echo
+}
+
+# Create database
+function action_create_db {
+	if [ $(mysql -B -N -e 'SHOW DATABASES' | grep $DATABASE > /dev/null; echo $?) -ne 0 ] ; then
+		# Database doesn't exist
+		echo "> Create $DATABASE database"
+		mysql -e "CREATE DATABASE $DATABASE"
+	fi
+}
+
+# Update the user
+function action_update_user {
+	# Grant privileges
+	echo "> Update '$USER'@'$HOST' privileges"
+	mysql -e "GRANT $PERM ON $DATABASE.* TO '$USER'@'$HOST'"
+
+	# Report
+	#mysql -e "SHOW GRANTS FOR '$USER'@'$HOST' \G"
+	NEW_PRIV=$(mysql -B -N -e "SELECT PRIVILEGE_TYPE FROM information_schema.SCHEMA_PRIVILEGES WHERE GRANTEE like \"'$USER'@'$HOST'\" ;" | tr '\n' ' ')
+	echo "> New privileges: $NEW_PRIV"
+}
+
+# Create the user
+function action_create_user {
+
+	# Check of permission are set or not
+	if [ -z "$PERM" ] ; then
+		PERM=$PERM_WRITE
+	fi
+
+	# Create user and password
+	echo "> Create '$USER'@'$HOST'"
+	PASSWORD=$(\apg -m 16 -M ncl -n 1 -a 1 -c /dev/urandom)
+	mysql -e "GRANT $PERM ON $DATABASE.* TO '$USER'@'$HOST' IDENTIFIED BY '$PASSWORD'"
+
+	# Report
+	echo "$USER = $PASSWORD" >> $OUT
+	echo "$USER = $PASSWORD"
+}
+
+
+################################
+# Init
+################################
+
+
+# Get database name
+if [ $# -eq 0 ]; then
+	action_show_db
+	exit 1
+elif [ $( echo $1 | grep -E '^[^\-].*' > /dev/null ; echo $?) -eq 0 ]; then
+	DATABASE=$1
+	shift 1
+else
+	echo "The database name is not valid."	
+	exit 1
+fi
+
+# Get command line options
+while getopts "hus:p:rlnu" OPTION; do
+case "$OPTION" in
+    s)
+	# Source: [IP] | [NET] | [HOSTNAME]
+	HOST="$OPTARG"
+	;;
+    p)
+	# Permission: 
+	case "$OPTARG" in
+		r)	PERM=$PERM_READ ;;
+		d)	PERM=$PERM_DATA ;;
+		w)	PERM=$PERM_WRITE ;;
+		a)	PERM=$PERM_ADMIN ;;
+		s)	PERM=$PERM_ADMIN; PERM_ROOT=1 ;;
+		*)	echo "Permission not possible. See $PROGRAM_NAME -h too see the possibility."; exit 1 ;;
+	esac
+	;;
+    n)
+	# Source: NET
+	HOST=$NET
+	;;
+    l)
+	# Source: LOCAL
+	HOST=$LOCAL
+	;;
+    r)
+	# Revoke existing grant
+	PERM_REVOKE=1
+	;;
+    u)
+	# Show users
+	action_users $DATABASE
+	exit
+	;;
+    h)
+	# Help
+	action_help
+	exit
+	;;
+    *)
+	echo "Unrecognized option"
+	action_help
+	exit 1
+	;;
+esac
+done
+
+
+# Get optional username
+if [ $( echo $1 | grep -E '^[^\-].*' > /dev/null; echo $?) -eq 0 ]; then
+	USER=$1
+	shift 1
+	# An user with the same name have been found
+else
+	USER=$DATABASE
+fi
+
+# Try to fin HOST value
+USER_MATCH=$(mysql -B -N -e "select user, host from mysql.user WHERE password <> '' AND user = '$USER' ORDER BY user,host")
+if [ -n "$USER_MATCH" ]; then
+	if [ $(echo "$USER_MATCH" | wc -l) -eq 1 ]; then
+
+		# Get the only choice
+		HOST=$( echo $USER_MATCH | awk '{print $2}')
+
+	elif [ $(echo "$USER_MATCH" | wc -l) -gt 1 ]; then
+
+		if [ $(echo $USER_MATCH | grep $HOST > /dev/null; echo $?) -eq 0 ]; then
+			HOST=$HOST
+		else
+			HOST=$( echo $USER_MATCH | tail -n 1 | awk '{print $2}'  )
+		fi
+	fi
+fi
+echo "> User selected is '$USER'@'$HOST'"
+
+
+################################
+# Do the magic
+################################
+
+# Create the DB if necessary
+action_create_db
+
+# Revoke all privileges
+if [ $PERM_REVOKE -eq 1 ]; then
+	echo "> Revoke all priviles for '$USER'@'$HOST'"
+	mysql -e "REVOKE ALL PRIVILEGES ON $DATABASE.* FROM '$USER'@'$HOST'"
+	mysql -e "REVOKE ALL PRIVILEGES, GRANT OPTION FROM '$USER'@'$HOST'"
+fi
+
+# Create or update the user
+if [ $(mysql -e 'select user, host from mysql.user WHERE password <> "" ORDER BY user,host' | grep $USER > /dev/null; echo $?) -eq 0 ]; then
+	if [ -n "$PERM" ]; then
+		action_update_user
+	else
+		action_users $DATABASE
+	fi
+else
+	action_create_user
+fi
+
+# Grant global privileges
+if [ $PERM_ROOT -eq 1 ]; then
+	echo "> Give global privileges to '$USER'@'$HOST'"
+	mysql -e "GRANT $PERM_SUPER ON *.* TO '$USER'@'$HOST' WITH GRANT OPTION"
+fi
+
+

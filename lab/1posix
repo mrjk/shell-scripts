@@ -1,0 +1,4 @@
+#!/bin/sh
+man.cx 1posix "$@"
+
+# https://github.com/rtomayko/dotfiles/blob/rtomayko/bin/1posix

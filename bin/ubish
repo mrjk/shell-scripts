@@ -1,0 +1,10 @@
+#!/usr/bin/expect -f
+
+set target [lindex $argv 0]
+set password "T3rm!R0cks!duPoney+"
+
+spawn ssh -t "$target" sudo -i
+expect "password" { send -- "$password\r\r" }
+expect "*# " { send "TMOUT=0\r" }
+#expect "*# " { send "source <( curl --connect-timeout 3 https://raw.githubusercontent.com/mrjk/linux-personal-env/master/bash/bash.bashrc)\r" }
+interact

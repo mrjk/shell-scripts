@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# Allow local connections without IP checking
+ssh -o CheckHostIP=no $@

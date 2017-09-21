@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# This script allows the user to run a root command in any mode
+
+# Define the file to be edited
+command=${@:-/bin/bash}
+
+# Get the full path of the command in case user and root $PATH are
+# different.
+if [[ ! -f ${command} ]]; then
+    command=$(whereis  ${command} | sed 's/.*: //')
+fi
+
+# Try to edit the file
+if [[ $EUID -eq 0 ]]; then
+
+  # The user is already root, go with vim
+  ${command}
+
+elif command -v sudo >/dev/null 2>&1; then
+
+  # Check if sudo password has already been entered
+  if ! sudo -n true 2>/dev/null ; then
+    >&2 echo "WARN: You need be root, please enter your 'sudo' password:"
+  fi
+
+  # Go with sudo
+  sudo ${command}
+
+elif command -v su >/dev/null 2>&1; then
+
+  # Go with su
+  >&2 echo "WARN: You need be root, please enter the root password:"
+  su -c "${command}" root
+
+else
+
+  # It is not possible to authenticate and run the command
+  >&2 echo "ERROR: You need be root or have 'sudo' or 'su' to run this command."
+  exit 1
+
+fi
+

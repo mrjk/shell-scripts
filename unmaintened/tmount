@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# This command display the mount command in a table for easier read
+
+mount $@ | column -t
+
+

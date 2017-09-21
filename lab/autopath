@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# TOFIX: Quick fix
+
+. ~/homeland/.config/autopath/config
+
+. ~/homeland/.usr/lib/hdm_autopath.sh

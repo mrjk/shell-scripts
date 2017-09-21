@@ -1,0 +1,304 @@
+#!/bin/bash
+
+
+
+### Library
+
+# This command display help
+c_help() {
+
+  echo "Usage: d app[-version][-flavor] [action]"
+  echo "       d [ls-build|ls-images|ls-run]"
+  echo ""
+  echo "Exemples:"
+  echo "       d vagrant bash"
+  echo "       d vagrant-ansible up"
+  echo "       d vagrant-1.9.2 up"
+  echo "       d vagrant-1.9.2-ansible up"
+  echo ""
+}
+
+# This command list all available apps
+c_list_build() {
+  find "${ROOT_DIR}". -name "Dockerfile*" \( -type f -o -type l \) | tr '/' ' ' | awk '{print $(NF-1),$NF}' | sed -E -e 's/Dockerfile\-*//' -e 's/(.)\s(.)/\1-\2/' | sort -r
+}
+
+# This build the container
+# args: app version DockerfilePath
+c_dbuild () {
+
+  local app=$1
+  local version=$2
+  local filename=$(basename $3)
+  local path=$(dirname $3)
+
+  # Remove version?
+  if [[ "$version" == "-" ]]; then
+    version=""
+  else
+    version=":${version}"
+  fi
+
+  cd ${path}
+  # Build the image
+  docker build -t ${app}${version} -f ${filename} .
+
+  # Tag the image app:latest
+  docker tag ${app}${version} ${app}:latest
+
+}
+
+# This run an instance of the container
+# args: app version DockerFilePath args
+c_drun() {
+
+  local app=$1
+  local version=$2
+  local dockerfile=$3
+  shift 3
+  local d_args=$@
+
+  # Strip fversion and dversion
+  if [[ "$version" == "-" ]]; then
+    fversion=""
+    dversion=""
+  else
+    fversion="-${version}"
+    dversion=":${version}"
+  fi
+
+  # Load config
+  if [[ -f "${ROOT_DIR}/${app}/exec-${version}.sh" ]]; then
+    source "${ROOT_DIR}/${app}/exec-${version}.sh"
+  elif [[ -f "${ROOT_DIR}/${app}/exec.sh" ]]; then
+    source "${ROOT_DIR}/${app}/exec.sh"
+  fi
+  if [[ -f "${XDG_CONFIG_HOME}/d/${app}${fversion}.sh" ]]; then
+    source "${XDG_CONFIG_HOME}/d/${app}${fversion}.sh"
+  elif [[ -f "${XDG_CONFIG_HOME}/d/${app}.sh" ]]; then
+    source "${XDG_CONFIG_HOME}/d/${app}.sh"
+  fi
+
+  # Manage default command
+  local d_prefix
+  if [[ -z ${d_args} ]]; then
+    d_prefix=${r_default_cmd}
+  fi
+
+  # Check if instance is available
+  if ! docker images | awk '{print $1 ":" $2}' | grep ${app}${dversion:-:} >&/dev/null ; then
+    c_dbuild "${app}" "${version}" "${dockerfile}"
+  fi
+
+  # Init vars
+  local d_env d_volumes d_ports
+
+  # New params build
+  local d_user d_user_id d_user_home
+  if [[ "${r_runasroot}" == "true" ]]; then
+    d_user=root
+    d_user_id=0
+    d_user_home=/root
+  else
+    d_user=$(id -un)
+    d_user_uid=$(id -u)
+    d_user_gid=$(id -u)
+    d_user_home=/home/${d_user}
+
+    # Export HOME
+    if [[ "${r_vol_home}" == "true" ]]; then
+      d_volumes="${d_volumes} -v ${HOME}:${d_user_home}"
+    elif [[ "${r_vol_home}" == "ro" ]]; then
+      d_volumes="${d_volumes} -v ${HOME}:${d_user_home}:ro"
+    fi
+  fi
+
+
+  # Export CWD
+  if [[ "${r_vol_cwd}" == "true" ]]; then
+    d_volumes="-v ${PWD}:${d_user_home}/${PWD##*/}"
+  elif [[ "${r_vol_cwd}" == "ro" ]]; then
+    d_volumes="-v ${PWD}:${d_user_home}/${PWD##*/}:ro"
+  fi
+
+  # Export sshagent
+  if [[ "${r_vol_sshagent}" == "true" ]]; then
+    d_volumes="${d_volumes} ${SSH_AUTH_SOCK:+ -v $SSH_AUTH_SOCK:${d_user_home}/.sockets/ssh}"
+    d_env="${d_env} ${SSH_AUTH_SOCK:+ -e SSH_AUTH_SOCK=${d_user_home}/.sockets/ssh}"
+  fi
+
+  # Import d tools
+  d_volumes="${d_volumes} -v ${ROOT_DIR}/_docker:/opt/docker"
+
+  if [[ "${r_runasroot}" == "true" ]]; then
+    if [[ "${r_vol_cwd}" != "false" ]]; then
+      docker run -it --rm \
+        ${d_env} \
+        ${d_volumes} \
+        ${d_ports} \
+        ${app}${dversion} \
+        /bin/bash -c "cd ${d_user_home}/${PWD##*/} && ${d_prefix} ${d_args}" 
+    else
+      docker run -it --rm \
+        ${d_env} \
+        ${d_volumes} \
+        ${d_ports} \
+        ${app}${dversion} \
+        ${d_prefix} ${d_args} 
+    fi
+  else
+    if [[ "${r_vol_cwd}" != "false" ]]; then
+      docker run -it --rm \
+        ${d_env} \
+        ${d_volumes} \
+        ${d_ports} \
+        ${app}${dversion} \
+	/bin/bash -c "/opt/docker/bin/user_create.sh ${d_user} ${d_user_uid} ${d_user_gid}  && /opt/docker/bin/su-exec ${d_user} ${d_prefix} ${d_args}"
+
+#        /bin/bash -c "groupadd -og ${d_user_gid} -f ${d_user} && \
+#	  useradd -s /bin/bash -ou ${d_user_uid} -g ${d_user_gid} -d ${d_user_home} ${d_user} && \
+#	  chown ${d_user_uid}:${d_user_gid} ${d_user_home} && \
+#	  su ${d_user} -p -c \"cd ${d_user_home}/${PWD##*/} && ${d_prefix} ${d_args}\" "
+    else
+      echo "NOP"
+    fi
+  fi
+
+
+  # Check if instance is not already running (Concurrency param)
+    # If so, exit
+  # Load user config
+    # Use default if not set
+
+
+  # Strip dversion
+}
+
+# Try to find a configuration file according a app name
+# arg: path object
+# echo: DockerfilePath
+c_search_dfile () {
+
+  local path=$1
+  local kw="$( echo $2 | sed 's/-/ /')"
+  local count=$(echo $kw | wc -w)
+  local current=$(echo $kw | cut -d' ' -f 1 )
+  local next=$(echo $kw | cut -d' ' -f 2 )
+
+  if [[ ${count} -eq 1 ]]; then
+
+
+    if [[ -d ${path}/${current} ]]; then
+      # Match: app -> app/Dockerfile
+      local app=$( basename "${path}/${current}")
+      local version=-
+      echo ${app} ${version} ${path}/${current}/Dockerfile
+    elif [[ -f ${path}-${current} ]]; then
+      # Match: app-version, app-flavor -> app/Dockerfile-version
+      local app=$( basename $( dirname "${path}-${current}"))
+      local version=$(echo "${path}-${current}" | sed -E  's/[^-]*-//')
+      echo ${app} ${version} ${path}-${current}
+    else
+      >&2 echo "ERR: Could not find configuration image :/" 
+      exit 1
+    fi
+
+  else
+    #app -> ${app}/Dockerfile ${next}
+    #version -> app/Dockerfile-${version} ${next}
+
+
+    if [[ -d ${path}/${current} ]]; then
+      #Match: app/
+      c_search_dfile ${path}/${current}/Dockerfile ${next}
+    elif [[ -f ${path}/Dockerfile-${current} ]]; then
+      # Match app/Dockerfile-version
+      c_search_dfile ${path}/Dockerfile-${current} ${next}
+    elif [[ -f ${path}-${current} ]]; then
+      # Match: app/Dockerfile-version-flavor
+      c_search_dfile ${path}-${current} ${next}
+    else
+      >&2 echo "ERR: Could not find configuration image :/ SHOULD NEVER SEE THIS !!!"
+      exit 1
+    fi
+  fi
+
+}
+
+# This parse the command line app-version-flavor
+# arg: string
+# echo: app version flavor
+c_parse_app (){
+
+  local str=$1
+
+  c_search_dfile ${ROOT_DIR} ${str}
+
+}
+
+# This parse the command line app-version-flavor
+# arg: string
+# echo: string
+c_parse_action (){
+
+  case $1 in
+    run)
+      echo "run"
+      ;;
+    build)
+      echo "build"
+      ;;
+    *)
+      echo "none"
+      ;;
+  esac
+
+}
+
+### Main
+
+ROOT_DIR=/home/jez/data/prj/lab/dockers
+
+# Command detection
+c_command=$( c_parse_action ${1} )
+if [[ "${c_command}" == "none" ]]; then
+  echo "ERR: You must define an action: build|run"
+  exit 1
+fi
+
+# Application detection
+c_app=$( c_parse_app $2 )
+if [[ -z ${c_app} ]]; then 
+  echo "ERR: Application must be valid"
+  exit 1
+fi
+
+# Other args
+shift 2
+c_args=$@
+
+
+# DEbug
+#echo "Source file: ${c_app}"
+
+# Action dispatcher
+case ${c_command} in
+  run)
+    c_drun ${c_app} ${c_args}
+    ;;
+  build)
+    c_dbuild ${c_app}
+    ;;
+  ls-build)
+    c_list_build
+    ;;
+  help)
+    c_help
+    ;;
+  *)
+    echo "Fail :'s"
+    c_help
+    exit 1
+    ;;
+esac
+

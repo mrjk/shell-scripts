@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# This function transform unicode text to ascii
+
+if [[ ! -z <&0 ]]; then
+  tail --bytes=+4' <&0
+else [[ ! -z $1 ]]; then
+  tail --bytes=+4' $1
+else
+  >&2 echo "ERROR: You must stdin a text or set files as arguments"
+fi
+
+

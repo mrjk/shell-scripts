@@ -1,0 +1,10 @@
+#!/bin/bash
+
+CONF_DIR=${HOME}/.ssh/env/
+CURRENT=$(hostname -d)
+CURRENT=${CURRENT:-default}
+
+
+ln -fs lan_$CURRENT.yml ${CONF_DIR}/lan_current.yml
+
+echo "SSH environment updated to fit '$CURRENT' location"
